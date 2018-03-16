@@ -1,36 +1,57 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+using Telegram.Bot.Framework.Abstractions;
 
 namespace rpkp
 {
     public class Startup
     {
-        // This method gets called by the runtime. Use this method to add services to the container.
-        // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
-        public void ConfigureServices(IServiceCollection services)
+        private readonly IConfigurationRoot _configuration;
+
+        public Startup(IHostingEnvironment env)
         {
+            _configuration = new ConfigurationBuilder()
+                .SetBasePath(env.ContentRootPath)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
         }
 
-        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
+        public void ConfigureServices(IServiceCollection services)
         {
-            loggerFactory.AddConsole();
+            services
+                .AddRouting()
+                .AddTelegramBot<RpkpBot>(_configuration.GetSection("Rpkp"))
+                .AddUpdateHandler<StartCommand>()
+                .AddUpdateHandler<SearchCommand>()
+                .Configure();
+        }
 
-            if (env.IsDevelopment())
-            {
-                app.UseDeveloperExceptionPage();
-            }
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        {
+            var routes = new MyRoutes(app);
 
-            app.Run(async (context) =>
-            {
-                await context.Response.WriteAsync("Hello World!");
+            var source = new CancellationTokenSource();
+            Task.Factory.StartNew(() => {
+                Console.WriteLine("## Press Enter to stop bot manager...");
+                Console.ReadLine();
+                source.Cancel();
+            });
+            Task.Factory.StartNew(async () => {
+                var botManager = app.ApplicationServices.GetRequiredService<IBotManager<RpkpBot>>();
+                while (!source.IsCancellationRequested)
+                {
+                    await Task.Delay(3_000);
+                    await botManager.GetAndHandleNewUpdatesAsync();
+                }
+                Console.WriteLine("## Bot manager stopped.");
+                Environment.Exit(0);
+            }).ContinueWith(t => {
+                if (t.IsFaulted) throw t.Exception;
             });
         }
     }
