@@ -24,7 +24,6 @@ namespace rpkp
         public void ConfigureServices(IServiceCollection services)
         {
             services
-                .AddRouting()
                 .AddTelegramBot<RpkpBot>(_configuration.GetSection("Rpkp"))
                 .AddUpdateHandler<StartCommand>()
                 .AddUpdateHandler<SearchCommand>()
@@ -33,8 +32,6 @@ namespace rpkp
 
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)
         {
-            var routes = new MyRoutes(app);
-
             var source = new CancellationTokenSource();
             Task.Factory.StartNew(() => {
                 Console.WriteLine("## Press Enter to stop bot manager...");
